@@ -135,7 +135,7 @@ contract UniswapV3PoolTest is Test, TestUtils {
         );
     }
 
-    function testMintInvalidTickRangeLower() public {
+    function testMintFail_02() public {
         pool = new UniswapV3Pool(
             address(token0),
             address(token1),
@@ -148,6 +148,96 @@ contract UniswapV3PoolTest is Test, TestUtils {
         pool.mint(address(this), -887273, 0, 0, "");
     }
 
+    function testSwapBuyEth() public {
+        TestCaseParams memory params = TestCaseParams({
+            wethBalance: 1 ether,
+            usdcBalance: 5000 ether,
+            currentTick: 85176,
+            lowerTick: 84222,
+            upperTick: 86129,
+            liquidity: 1517882343751509868544,
+            currentSqrtP: 5602277097478614198912276234240,
+            transferInMintCallback: true,
+            transferInSwapCallback: true,
+            mintLiquidity: true
+        });
+        (uint256 poolBalance0, uint256 poolBalance1) = setupTestCase(params);
+
+        uint256 swapAmount = 42 ether; // 42 USDC
+        token1.mint(address(this), swapAmount);
+        token1.approve(address(this), swapAmount);
+
+        UniswapV3Pool.CallbackData memory extra = UniswapV3Pool.CallbackData({
+            token0: address(token0),
+            token1: address(token1),
+            payer: address(this)
+        });
+
+        int256 userBalance0Before = int256(token0.balanceOf(address(this)));
+
+        (int256 amount0Delta, int256 amount1Delta) = pool.swap(
+            address(this),
+            abi.encode(extra)
+        );
+
+        assertEq(amount0Delta, -0.008396714242162444 ether, "invalid ETH out");
+        assertEq(amount1Delta, 42 ether, "invalid USDC in");
+
+        assertEq(
+            token0.balanceOf(address(this)),
+            uint256(userBalance0Before - amount0Delta),
+            "invalid user ETH balance"
+        );
+        assertEq(
+            token1.balanceOf(address(this)),
+            0,
+            "invalid user USDC balance"
+        );
+
+        assertEq(
+            token0.balanceOf(address(pool)),
+            uint256(int256(poolBalance0) + amount0Delta),
+            "invalid pool ETH balance"
+        );
+        assertEq(
+            token1.balanceOf(address(pool)),
+            uint256(int256(poolBalance1) + amount1Delta),
+            "invalid pool USDC balance"
+        );
+
+        (uint160 sqrtPriceX96, int24 tick) = pool.slot0();
+        assertEq(
+            sqrtPriceX96,
+            5604469350942327889444743441197,
+            "invalid current sqrtP"
+        );
+        assertEq(tick, 85184, "invalid current tick");
+        assertEq(
+            pool.liquidity(),
+            1517882343751509868544,
+            "invalid current liquidity"
+        );
+    }
+
+    function testSwapFail_01() public {
+        TestCaseParams memory params = TestCaseParams({
+            wethBalance: 1 ether,
+            usdcBalance: 5000 ether,
+            currentTick: 85176,
+            lowerTick: 84222,
+            upperTick: 86129,
+            liquidity: 1517882343751509868544,
+            currentSqrtP: 5602277097478614198912276234240,
+            transferInMintCallback: true,
+            transferInSwapCallback: false,
+            mintLiquidity: true
+        });
+        setupTestCase(params);
+
+        vm.expectRevert(encodeError("InsufficientInputAmount()"));
+        pool.swap(address(this), "");
+    }
+
     function uniswapV3MintCallback(
         uint256 amount0,
         uint256 amount1,
@@ -158,19 +248,47 @@ contract UniswapV3PoolTest is Test, TestUtils {
                 data,
                 (UniswapV3Pool.CallbackData)
             );
-            console.log(
-                "balance0 %s",
-                IERC20(extra.token0).balanceOf(extra.payer)
-            );
-            console.log(
-                "balance1 %s",
-                IERC20(extra.token1).balanceOf(extra.payer)
-            );
-            console.log("NEED TRANSFER0 %s", amount0);
-            console.log("NEED TRANSFER1 %s", amount1);
+            // console.log(
+            //     "balance0 %s",
+            //     IERC20(extra.token0).balanceOf(extra.payer)
+            // );
+            // console.log(
+            //     "balance1 %s",
+            //     IERC20(extra.token1).balanceOf(extra.payer)
+            // );
+            // console.log("NEED TRANSFER0 %s", amount0);
+            // console.log("NEED TRANSFER1 %s", amount1);
 
             IERC20(extra.token0).transferFrom(extra.payer, msg.sender, amount0);
             IERC20(extra.token1).transferFrom(extra.payer, msg.sender, amount1);
+        }
+    }
+
+    function uniswapV3SwapCallback(
+        int256 amount0,
+        int256 amount1,
+        bytes calldata data
+    ) public {
+        if (transferInSwapCallback) {
+            UniswapV3Pool.CallbackData memory extra = abi.decode(
+                data,
+                (UniswapV3Pool.CallbackData)
+            );
+
+            if (amount0 > 0) {
+                IERC20(extra.token0).transferFrom(
+                    extra.payer,
+                    msg.sender,
+                    uint256(amount0)
+                );
+            }
+            if (amount1 > 0) {
+                IERC20(extra.token1).transferFrom(
+                    extra.payer,
+                    msg.sender,
+                    uint256(amount1)
+                );
+            }
         }
     }
 
