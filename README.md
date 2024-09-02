@@ -55,4 +55,12 @@
     - 知道了价格区间
     - 知道了流动性
     - 得出需要提供的x,y
-- 
+- 完成代码
+  - mint swap 公式计算部分省略
+  - test
+  - deploy
+- 技巧
+  - forge inspect aapool abi
+  - cast call
+  - cast --abi-decode
+  - cast --to-dec
