@@ -42,7 +42,7 @@ contract UniswapV3PoolTest is Test, TestUtils {
             currentSqrtP: 5602277097478614198912276234240,
             transferInMintCallback: true,
             transferInSwapCallback: true,
-            mintLiqudity: true
+            mintLiquidity: true
         });
 
         (uint256 poolBalance0, uint256 poolBlance1) = setupTestCase(params);
@@ -67,8 +67,9 @@ contract UniswapV3PoolTest is Test, TestUtils {
             expectedAmount1,
             "incorrect token1 deposited amount"
         );
-        assertEq(token0.balanceOf(address(this)), expectedAmount0);
-        assertEq(token1.balanceOf(address(this)), expectedAmount1);
+
+        assertEq(token0.balanceOf(address(pool)), expectedAmount0);
+        assertEq(token1.balanceOf(address(pool)), expectedAmount1);
 
         bytes32 positionKey = keccak256(
             abi.encodePacked(address(this), params.lowerTick, params.upperTick)
@@ -80,7 +81,7 @@ contract UniswapV3PoolTest is Test, TestUtils {
             params.lowerTick
         );
         assertTrue(tickInitialized);
-        assertTrue(tickLiquidity, params.liquidity);
+        assertEq(tickLiquidity, params.liquidity);
 
         (tickInitialized, tickLiquidity) = pool.ticks(params.upperTick);
         assertTrue(tickInitialized);
@@ -100,6 +101,53 @@ contract UniswapV3PoolTest is Test, TestUtils {
         );
     }
 
+    function testMintFail_01() public {
+        TestCaseParams memory params = TestCaseParams({
+            wethBalance: 1 ether,
+            usdcBalance: 4000 ether,
+            currentTick: 85176,
+            lowerTick: 84222,
+            upperTick: 86129,
+            liquidity: 1517882343751509868544,
+            currentSqrtP: 5602277097478614198912276234240,
+            transferInMintCallback: true,
+            transferInSwapCallback: true,
+            mintLiquidity: false
+        });
+        setupTestCase(params);
+
+        token0.approve(address(this), params.wethBalance);
+        token1.approve(address(this), params.usdcBalance);
+
+        UniswapV3Pool.CallbackData memory extra = UniswapV3Pool.CallbackData({
+            token0: address(token0),
+            token1: address(token1),
+            payer: address(this)
+        });
+
+        vm.expectRevert();
+        pool.mint(
+            address(this),
+            params.lowerTick,
+            params.upperTick,
+            params.liquidity,
+            abi.encode(extra)
+        );
+    }
+
+    function testMintInvalidTickRangeLower() public {
+        pool = new UniswapV3Pool(
+            address(token0),
+            address(token1),
+            uint160(1),
+            0
+        );
+
+        vm.expectRevert(encodeError("InvalidTickRange()"));
+        // vm.expectRevert(UniswapV3Pool.InvalidTickRange.selector);
+        pool.mint(address(this), -887273, 0, 0, "");
+    }
+
     function uniswapV3MintCallback(
         uint256 amount0,
         uint256 amount1,
@@ -110,6 +158,16 @@ contract UniswapV3PoolTest is Test, TestUtils {
                 data,
                 (UniswapV3Pool.CallbackData)
             );
+            console.log(
+                "balance0 %s",
+                IERC20(extra.token0).balanceOf(extra.payer)
+            );
+            console.log(
+                "balance1 %s",
+                IERC20(extra.token1).balanceOf(extra.payer)
+            );
+            console.log("NEED TRANSFER0 %s", amount0);
+            console.log("NEED TRANSFER1 %s", amount1);
 
             IERC20(extra.token0).transferFrom(extra.payer, msg.sender, amount0);
             IERC20(extra.token1).transferFrom(extra.payer, msg.sender, amount1);
@@ -117,7 +175,7 @@ contract UniswapV3PoolTest is Test, TestUtils {
     }
 
     function setupTestCase(
-        TestcaseParams memory params
+        TestCaseParams memory params
     ) internal returns (uint256 poolBalance0, uint256 poolBalance1) {
         token0.mint(address(this), params.wethBalance);
         token1.mint(address(this), params.usdcBalance);
@@ -129,7 +187,7 @@ contract UniswapV3PoolTest is Test, TestUtils {
             params.currentTick
         );
 
-        if (params.mintLiqudity) {
+        if (params.mintLiquidity) {
             token0.approve(address(this), params.wethBalance);
             token1.approve(address(this), params.usdcBalance);
 

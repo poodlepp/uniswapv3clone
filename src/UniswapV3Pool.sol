@@ -5,13 +5,14 @@ import {Tick} from "./lib/Tick.sol";
 import {Position} from "./lib/Position.sol";
 import "./interfaces/IERC20.sol";
 import "./interfaces/IUniswapV3MintCallback.sol";
+import "forge-std/console.sol";
 
 contract UniswapV3Pool {
     using Tick for mapping(int24 => Tick.Info);
     using Position for mapping(bytes32 => Position.Info);
     using Position for Position.Info;
 
-    error InvalidIckRange();
+    error InvalidTickRange();
     error InsufficientInputAmount();
     error ZeroLiquidity();
 
@@ -86,7 +87,7 @@ contract UniswapV3Pool {
             lowerTick >= upperTick ||
             lowerTick < MIN_TICK ||
             upperTick > MAX_TICK
-        ) revert InvalidIckRange();
+        ) revert InvalidTickRange();
 
         if (amount == 0) revert ZeroLiquidity();
 
@@ -109,11 +110,15 @@ contract UniswapV3Pool {
         uint256 balance1Before;
         if (amount0 > 0) balance0Before = balance0();
         if (amount1 > 0) balance1Before = balance1();
+        console.log("balance-0-bf %s", balance0Before);
+        console.log("balance-1-bf %s", balance1Before);
         IUniswapV3MintCallback(msg.sender).uniswapV3MintCallback(
             amount0,
             amount1,
             data
         );
+        console.log("balance-0 %s", balance0());
+        console.log("balance-1 %s", balance1());
         if (amount0 > 0 && balance0Before + amount0 > balance0())
             revert InsufficientInputAmount();
         if (amount1 > 0 && balance1Before + amount1 > balance1())
