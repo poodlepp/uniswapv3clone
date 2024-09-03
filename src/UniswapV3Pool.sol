@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.8.26;
 
-import {Tick} from "./lib/Tick.sol";
-import {Position} from "./lib/Position.sol";
+import "./lib/Tick.sol";
+import "./lib/TickBitmap.sol";
+import "./lib/Position.sol";
+import "./lib/Math.sol";
+import "./lib/TickMath.sol";
 import "./interfaces/IERC20.sol";
 import "./interfaces/IUniswapV3MintCallback.sol";
 import "./interfaces/IUniswapV3SwapCallback.sol";
@@ -10,6 +13,7 @@ import "forge-std/console.sol";
 
 contract UniswapV3Pool {
     using Tick for mapping(int24 => Tick.Info);
+    using TickBitmap for mapping(int16 => uint256);
     using Position for mapping(bytes32 => Position.Info);
     using Position for Position.Info;
 
@@ -59,6 +63,7 @@ contract UniswapV3Pool {
     uint128 public liquidity;
     //每个tick的数据
     mapping(int24 => Tick.Info) public ticks;
+    mapping(int16 => uint256) public tickBitmap;
     //代表用户的流动性
     mapping(bytes32 => Position.Info) public positions;
 
@@ -92,8 +97,14 @@ contract UniswapV3Pool {
 
         if (amount == 0) revert ZeroLiquidity();
 
-        ticks.update(lowerTick, amount);
-        ticks.update(upperTick, amount);
+        bool flippedLower = ticks.update(lowerTick, amount);
+        bool flippedUpper = ticks.update(upperTick, amount);
+        if (flippedLower) {
+            tickBitmap.flipTick(lowerTick, 1);
+        }
+        if (flippedUpper) {
+            tickBitmap.flipTick(upperTick, 1);
+        }
 
         Position.Info storage position = positions.get(
             owner,
@@ -102,8 +113,16 @@ contract UniswapV3Pool {
         );
         position.update(amount);
 
-        amount0 = 0.998976618347425280 ether; // TODO: replace with calculation
-        amount1 = 5000 ether; // TODO: replace with calculation
+        amount0 = Math.calcAmount0Delta(
+            TickMath.getSqrtRatioAtTick(slot0.tick),
+            TickMath.getSqrtRatioAtTick(upperTick),
+            amount
+        );
+        amount1 = Math.calcAmount1Delta(
+            TickMath.getSqrtRatioAtTick(slot0.tick),
+            TickMath.getSqrtRatioAtTick(lowerTick),
+            amount
+        );
 
         liquidity += uint128(amount);
 
@@ -111,15 +130,15 @@ contract UniswapV3Pool {
         uint256 balance1Before;
         if (amount0 > 0) balance0Before = balance0();
         if (amount1 > 0) balance1Before = balance1();
-        console.log("balance-0-bf %s", balance0Before);
-        console.log("balance-1-bf %s", balance1Before);
+        // console.log("balance-0-bf %s", balance0Before);
+        // console.log("balance-1-bf %s", balance1Before);
         IUniswapV3MintCallback(msg.sender).uniswapV3MintCallback(
             amount0,
             amount1,
             data
         );
-        console.log("balance-0 %s", balance0());
-        console.log("balance-1 %s", balance1());
+        // console.log("balance-0 %s", balance0());
+        // console.log("balance-1 %s", balance1());
         if (amount0 > 0 && balance0Before + amount0 > balance0())
             revert InsufficientInputAmount();
         if (amount1 > 0 && balance1Before + amount1 > balance1())

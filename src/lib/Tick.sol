@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity = 0.8.26;
+pragma solidity =0.8.26;
 
 library Tick {
     struct Info {
@@ -7,10 +7,15 @@ library Tick {
         uint128 liquidity;
     }
 
-    function update(mapping(int24 => Tick.Info) storage self, int24 tick, uint128 liquidityDelta) internal {
+    function update(
+        mapping(int24 => Tick.Info) storage self,
+        int24 tick,
+        uint128 liquidityDelta
+    ) internal returns (bool flipped) {
         Tick.Info storage tickInfo = self[tick];
         uint128 liquidityBefore = tickInfo.liquidity;
         uint128 liquidityAfter = liquidityBefore + liquidityDelta;
+        flipped = (liquidityAfter == 0) != (liquidityBefore == 0);
         //如果delata == 0，这里可能存在bug
         if (liquidityBefore == 0) {
             tickInfo.initialized = true;
