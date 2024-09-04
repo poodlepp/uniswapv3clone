@@ -68,3 +68,20 @@
 #### milestone2
 - 套用数学公式 实现单个区间内的 mint swap
 
+#### milestone3
+- 跨tick交易
+  - 提供流动性 区间可以不包含当前的价格节点
+    - 不包含当前的price  那么其实只需要提供一种token
+  - 其实类似于限价单
+  - liquidity的概念
+    - 不同的position会有区间，区间会重叠，全局liquidity计算的是当前价格 所有有关系的区间的liquidity之和
+      - position会在两端的tick位置 记录出，入
+        - 便于计算当前时点的liquidity
+    - 重叠的区间，价格移动就会变慢
+- mint
+  - 计算需要transfer的token数量，按照区间位置分三种情况
+- swap
+  - 逐个tick计算，注意state，step概念的使用
+  - step为循环处理一步步 直到满足需要
+- liquidity
+- 滑点

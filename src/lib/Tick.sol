@@ -37,4 +37,12 @@ library Tick {
             ? int128(int256(tickInfo.liquidityNet) - liquidityDelta)
             : int128(int256(tickInfo.liquidityNet) + liquidityDelta);
     }
+
+    function cross(
+        mapping(int24 => Tick.Info) storage self,
+        int24 tick
+    ) internal view returns (int128 liquidityDelta) {
+        Tick.Info storage tickInfo = self[tick];
+        liquidityDelta = tickInfo.liquidityNet;
+    }
 }
