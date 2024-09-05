@@ -10,6 +10,7 @@ import "./lib/SwapMath.sol";
 import "./interfaces/IERC20.sol";
 import "./interfaces/IUniswapV3MintCallback.sol";
 import "./interfaces/IUniswapV3SwapCallback.sol";
+import "./interfaces/IUniswapV3FlashCallback.sol";
 import "forge-std/console.sol";
 
 contract UniswapV3Pool {
@@ -23,6 +24,8 @@ contract UniswapV3Pool {
     error ZeroLiquidity();
     error InvalidPriceLimit();
     error NotEnoughLiquidity();
+
+    event Flash(address indexed recipient, uint256 amount0, uint256 amount1);
 
     event Mint(
         address sender,
@@ -320,6 +323,25 @@ contract UniswapV3Pool {
             liquidity,
             slot0.tick
         );
+    }
+
+    function flash(
+        uint256 amount0,
+        uint256 amount1,
+        bytes calldata data
+    ) public {
+        uint256 balance0Before = IERC20(token0).balanceOf(address(this));
+        uint256 balance1Before = IERC20(token1).balanceOf(address(this));
+
+        if (amount0 > 0) IERC20(token0).transfer(msg.sender, amount0);
+        if (amount1 > 0) IERC20(token1).transfer(msg.sender, amount1);
+
+        IUniswapV3FlashCallback(msg.sender).uniswapV3FlashCallback(data);
+
+        require(IERC20(token0).balanceOf(address(this)) >= balance0Before);
+        require(IERC20(token1).balanceOf(address(this)) >= balance1Before);
+
+        emit Flash(msg.sender, amount0, amount1);
     }
 
     function balance0() internal returns (uint256 balance) {

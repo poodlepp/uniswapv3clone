@@ -85,3 +85,11 @@
   - step为循环处理一步步 直到满足需要
 - liquidity
 - 滑点
+  - sqrtPriceLimitX96  各个环节不能超过这个limit price
+- 流动性计算
+  - mint中涉及流动性计算
+  - 根据当前价格， 价格区间，amount0,amount1  计算所能提供的liquidity
+  - 如果价格区间 包含当前价格，需要计算左半边liquidity，右半边liquidity，取小一点的
+    - 为啥不是两侧相加？
+- 定点数
+- 闪电贷 flash
