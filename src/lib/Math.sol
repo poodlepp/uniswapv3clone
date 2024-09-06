@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.14;
+pragma solidity ^0.8.26;
 
 import "./FixedPoint96.sol";
 import "prb-math/PRBMath.sol";

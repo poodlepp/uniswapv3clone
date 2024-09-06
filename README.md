@@ -93,3 +93,20 @@
     - 为啥不是两侧相加？
 - 定点数
 - 闪电贷 flash
+
+
+#### milestone4
+- 多池子交易
+  - 工厂合约
+  - 链式交易
+  - 路由
+- 工厂
+  - 创建pair
+    - create2
+  - tick间隔 tickSpacing
+    - 波动性低的交易对，需要更高的精度
+    - 波动性高的交易对，需要更低的精度
+    - 限制价格区间对应的tick，实时价格tick是没有限制的
+    - 一个池子 由三个参数确定 token0 token1 tickSpacing
+    - 可以有个token相同 但是tickSpacing 不同的池子
+  - manager不再需要pool的地址

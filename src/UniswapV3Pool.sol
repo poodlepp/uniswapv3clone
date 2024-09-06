@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity =0.8.26;
+pragma solidity ^0.8.26;
 
 import "./lib/Tick.sol";
 import "./lib/TickBitmap.sol";
@@ -11,6 +11,7 @@ import "./interfaces/IERC20.sol";
 import "./interfaces/IUniswapV3MintCallback.sol";
 import "./interfaces/IUniswapV3SwapCallback.sol";
 import "./interfaces/IUniswapV3FlashCallback.sol";
+import "./interfaces/IUniswapV3PoolDeployer.sol":;
 import "forge-std/console.sol";
 
 contract UniswapV3Pool {
@@ -50,8 +51,6 @@ contract UniswapV3Pool {
     int24 internal constant MIN_TICK = -887272;
     int24 internal constant MAX_TICK = -MIN_TICK;
     //token pair
-    address public immutable token0;
-    address public immutable token1;
 
     struct Slot0 {
         uint160 sqrtPriceX96;
@@ -80,6 +79,11 @@ contract UniswapV3Pool {
         uint256 amountOut;
     }
 
+    address public immutable factory;
+    address public immutable token0;
+    address public immutable token1;
+    uint24 public immutable tickSpacing;
+
     //当前的价格数据
     Slot0 public slot0;
     //当前的流动性
@@ -91,14 +95,14 @@ contract UniswapV3Pool {
     mapping(bytes32 => Position.Info) public positions;
 
     // 初始化token pair, tick ,price
-    constructor(
-        address token0_,
-        address token1_,
-        uint160 sqrtPriceX96,
-        int24 tick
-    ) {
-        token0 = token0_;
-        token1 = token1_;
+    constructor() {
+        (factory, token0, token1, tickSpacing) = IUniswapV3PoolDeployer(msg.sender)
+            .parameters();
+    }
+
+    function initialize(uint160 sqrtPriceX96) public {
+        if (slot0.sqrtPriceX96 != 0) revert AlreadyInitialized();
+        int24 tick = TickMath.getTickAtSqrtRatio(sqrtPriceX96);
         slot0 = Slot0({sqrtPriceX96: sqrtPriceX96, tick: tick});
     }
 
@@ -123,10 +127,10 @@ contract UniswapV3Pool {
         bool flippedLower = ticks.update(lowerTick, int128(amount), false);
         bool flippedUpper = ticks.update(upperTick, int128(amount), true);
         if (flippedLower) {
-            tickBitmap.flipTick(lowerTick, 1);
+            tickBitmap.flipTick(lowerTick, int24(tickSpacing));
         }
         if (flippedUpper) {
-            tickBitmap.flipTick(upperTick, 1);
+            tickBitmap.flipTick(upperTick, int24(tickSpacing));
         }
 
         Position.Info storage position = positions.get(
@@ -232,7 +236,7 @@ contract UniswapV3Pool {
             step.sqrtPriceStartX96 = state.sqrtPriceX96;
             (step.nextTick, ) = tickBitmap.nextInitializedTickWithinOneWord(
                 state.tick,
-                1,
+                int24(tickSpacing),
                 zeroForOne
             );
             step.sqrtPriceNextX96 = TickMath.getSqrtRatioAtTick(step.nextTick);

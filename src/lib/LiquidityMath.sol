@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-pragma solidity ^0.8.14;
+pragma solidity ^0.8.26;
 
 import "prb-math/PRBMath.sol";
 import "./FixedPoint96.sol";
@@ -80,11 +80,10 @@ library LiquidityMath {
         }
     }
 
-    function addLiquidity(uint128 x, int128 y)
-        internal
-        pure
-        returns (uint128 z)
-    {
+    function addLiquidity(
+        uint128 x,
+        int128 y
+    ) internal pure returns (uint128 z) {
         if (y < 0) {
             z = x - uint128(-y);
         } else {
