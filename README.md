@@ -110,3 +110,9 @@
     - 一个池子 由三个参数确定 token0 token1 tickSpacing
     - 可以有个token相同 但是tickSpacing 不同的池子
   - manager不再需要pool的地址
+- 多池子 链式交易
+- 报价合约
+  - 结尾revert，不真正执行
+- 路由
+  - 最短路径
+- tick舍入
