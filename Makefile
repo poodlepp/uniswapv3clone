@@ -11,7 +11,7 @@ help:
 	@echo "  make fund [ARGS=...]\n    example: make deploy ARGS=\"--network sepolia\""
 
 install :; forge install foundry-rs/forge-std --no-commit && forge install openzeppelin/openzeppelin-contracts@v4.9.5 --no-commit && forge install rari-capital/solmate --no-commit && forge install PaulRBerg/prb-math@v2.5.0 --no-commit \
-		&& forge install GNSPS/solidity-bytes-utils@v0.8.0
+		&& forge install GNSPS/solidity-bytes-utils@v0.8.0 --no-commit
 
 test :; forge test 
 
