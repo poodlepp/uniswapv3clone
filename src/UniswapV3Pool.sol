@@ -67,6 +67,7 @@ contract UniswapV3Pool {
         uint256 amountCalculated;
         uint160 sqrtPriceX96;
         int24 tick;
+        uint256 feeGrowthGlobalX128;
         uint128 liquidity;
     }
 
@@ -83,6 +84,10 @@ contract UniswapV3Pool {
     address public immutable token0;
     address public immutable token1;
     uint24 public immutable tickSpacing;
+    uint24 public immutable fee;
+
+    uint256 public feeGrowthGlobal0x128;
+    uint256 public feeGrowthGlobal1x128;
 
     //当前的价格数据
     Slot0 public slot0;
@@ -93,10 +98,11 @@ contract UniswapV3Pool {
     mapping(int16 => uint256) public tickBitmap;
     //代表用户的流动性
     mapping(bytes32 => Position.Info) public positions;
+    //todo Oracle
 
     // 初始化token pair, tick ,price
     constructor() {
-        (factory, token0, token1, tickSpacing) = IUniswapV3PoolDeployer(msg.sender)
+        (factory, token0, token1, tickSpacing, fee) = IUniswapV3PoolDeployer(msg.sender)
             .parameters();
     }
 
@@ -225,6 +231,7 @@ contract UniswapV3Pool {
             amountCalculated: 0,
             sqrtPriceX96: slot0_.sqrtPriceX96,
             tick: slot0_.tick,
+            feeGrowthGlobalX128: zeroForOne ? feeGrowthGlobal0x128 : feeGrowthGlobal1x128,
             liquidity: liquidity_
         });
 
@@ -233,15 +240,23 @@ contract UniswapV3Pool {
             state.sqrtPriceX96 != sqrtPriceLimitX96
         ) {
             StepState memory step;
+
             step.sqrtPriceStartX96 = state.sqrtPriceX96;
+
             (step.nextTick, ) = tickBitmap.nextInitializedTickWithinOneWord(
                 state.tick,
                 int24(tickSpacing),
                 zeroForOne
             );
+
             step.sqrtPriceNextX96 = TickMath.getSqrtRatioAtTick(step.nextTick);
 
-            (state.sqrtPriceX96, step.amountIn, step.amountOut) = SwapMath
+            (
+                state.sqrtPriceX96, 
+                step.amountIn, 
+                step.amountOut, 
+                step.feeAmount
+            ) = SwapMath
                 .computeSwapStep(
                     state.sqrtPriceX96,
                     (
@@ -252,15 +267,27 @@ contract UniswapV3Pool {
                         ? sqrtPriceLimitX96
                         : step.sqrtPriceNextX96,
                     state.liquidity,
-                    state.amountSpecifiedRemaining
+                    state.amountSpecifiedRemaining,
+                    fee
                 );
 
-            state.amountSpecifiedRemaining -= step.amountIn;
+            state.amountSpecifiedRemaining -= step.amountIn + step.feeAmount;
             state.amountCalculated += step.amountOut;
 
+            if (state.liquidity > 0) {
+                state.feeGrowthGlobalX128 += PRBMath.mulDiv(
+                    step.feeAmount,
+                    FixedPoint128.Q128,
+                    state.liquidity
+                )
+            }
+            // 跨越tick时，需要更新liquidity, from info.liquidityNet
             if (state.sqrtPriceX96 == step.sqrtPriceNextX96) {
                 if (step.initialized) {
-                    int128 liquidityDelta = ticks.cross(step.nextTick);
+                    int128 liquidityDelta = ticks.cross(step.nextTick,
+                    (zeroForOne ? state.feeGrowthGlobalX128 : feeGrowthGlobal0X128),
+                    (zeroForOne ? feeGrowthGlobal1X128 : state.feeGrowthGlobalX128));
+
                     if (zeroForOne) liquidityDelta = -liquidityDelta;
                     state.liquidity = LiquidityMath.addLiquidity(
                         state.liquidity,
@@ -276,6 +303,7 @@ contract UniswapV3Pool {
             }
         }
 
+        //todo
         if (state.tick != slot0_.tick) {
             slot0.tick = state.tick;
             slot0.sqrtPriceX96 = state.sqrtPriceX96;
@@ -283,6 +311,12 @@ contract UniswapV3Pool {
 
         if (liquidity_ != state.liquidity) {
             liquidity = state.liquidity;
+        }
+
+        if (zeroForOne) {
+            feeGrowthGlobal0X128 = state.feeGrowthGlobalX128;
+        } else {
+            feeGrowthGlobal1X128 = state.feeGrowthGlobalX128;
         }
 
         (amount0, amount1) = zeroForOne

@@ -6,6 +6,58 @@ import "prb-math/PRBMath.sol";
 
 library Math {
     /// @notice Calculates amount0 delta between two prices
+    function calcAmount0Delta(
+        uint160 sqrtPriceAX96,
+        uint160 sqrtPriceBX96,
+        uint128 liquidity,
+        bool roundUp
+    ) internal pure returns (uint256 amount0) {
+        if (sqrtPriceAX96 > sqrtPriceBX96)
+            (sqrtPriceAX96, sqrtPriceBX96) = (sqrtPriceBX96, sqrtPriceAX96);
+
+        require(sqrtPriceAX96 > 0);
+
+        uint256 numerator1 = uint256(liquidity) << FixedPoint96.RESOLUTION;
+        uint256 numerator2 = sqrtPriceBX96 - sqrtPriceAX96;
+
+        if (roundUp) {
+            amount0 = divRoundingUp(
+                mulDivRoundingUp(numerator1, numerator2, sqrtPriceBX96),
+                sqrtPriceAX96
+            );
+        } else {
+            amount0 =
+                PRBMath.mulDiv(numerator1, numerator2, sqrtPriceBX96) /
+                sqrtPriceAX96;
+        }
+    }
+
+    /// @notice Calculates amount1 delta between two prices
+    function calcAmount1Delta(
+        uint160 sqrtPriceAX96,
+        uint160 sqrtPriceBX96,
+        uint128 liquidity,
+        bool roundUp
+    ) internal pure returns (uint256 amount1) {
+        if (sqrtPriceAX96 > sqrtPriceBX96)
+            (sqrtPriceAX96, sqrtPriceBX96) = (sqrtPriceBX96, sqrtPriceAX96);
+
+        if (roundUp) {
+            amount1 = mulDivRoundingUp(
+                liquidity,
+                (sqrtPriceBX96 - sqrtPriceAX96),
+                FixedPoint96.Q96
+            );
+        } else {
+            amount1 = PRBMath.mulDiv(
+                liquidity,
+                (sqrtPriceBX96 - sqrtPriceAX96),
+                FixedPoint96.Q96
+            );
+        }
+    }
+
+    /// @notice Calculates amount0 delta between two prices
     /// TODO: round down when removing liquidity
     function calcAmount0Delta(
         uint160 sqrtPriceAX96,

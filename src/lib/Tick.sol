@@ -10,6 +10,8 @@ library Tick {
         uint128 liquidityGross;
         // amount of liquidity added or substracted when tick is crossed
         int128 liquidityNet;
+        uint256 feeGrowthOutside0X128;
+        uint256 feeGrowthOutside1X128;
     }
 
     function update(
@@ -40,9 +42,17 @@ library Tick {
 
     function cross(
         mapping(int24 => Tick.Info) storage self,
-        int24 tick
-    ) internal view returns (int128 liquidityDelta) {
-        Tick.Info storage tickInfo = self[tick];
-        liquidityDelta = tickInfo.liquidityNet;
+        int24 tick,
+        uint256 feeGrowthGlobal0X128,
+        uint256 feeGrowthGlobal1X128
+    ) internal returns (int128 liquidityDelta) {
+        Tick.Info storage info = self[tick];
+        info.feeGrowthOutside0X128 =
+            feeGrowthGlobal0X128 -
+            info.feeGrowthOutside0X128;
+        info.feeGrowthOutside1X128 =
+            feeGrowthGlobal1X128 -
+            info.feeGrowthOutside1X128;
+        liquidityDelta = info.liquidityNet;
     }
 }

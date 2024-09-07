@@ -116,3 +116,14 @@
 - 路由
   - 最短路径
 - tick舍入
+
+#### milestone5
+- swap fees
+  - 费用收集
+    - 进入区间开始计算，离开区间停止
+    - 每个tick记录 自己之外的部分所积累的手续费
+    - position区间 可以由两端的tick计算得出
+    - tickSpacing  fee 息息相关
+      - tickSpacing越小，fee越小
+  - 分发
+- price oracle
