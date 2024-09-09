@@ -26,6 +26,24 @@ contract UniswapV3Pool {
     error InvalidPriceLimit();
     error NotEnoughLiquidity();
 
+    event Burn(
+        address indexed owner,
+        int24 indexed tickLower,
+        int24 indexed tickUpper,
+        uint128 amount,
+        uint256 amount0,
+        uint256 amount1
+    );
+
+    event Collect(
+        address indexed owner,
+        address recipient,
+        int24 indexed tickLower,
+        int24 indexed tickUpper,
+        uint256 amount0,
+        uint256 amount1
+    );
+
     event Flash(address indexed recipient, uint256 amount0, uint256 amount1);
 
     event Mint(
@@ -260,6 +278,77 @@ contract UniswapV3Pool {
             lowerTick,
             upperTick,
             amount,
+            amount0,
+            amount1
+        );
+    }
+
+    function burn(
+        int24 lowerTick,
+        int24 upperTick,
+        uint128 amount
+    ) public returns (uint256 amount0, uint256 amount1) {
+        (
+            Position.Info storage position,
+            int256 amount0Int,
+            int256 amount1Int
+        ) = _modifyPosition(
+            ModifyPositionParams({
+                owner: msg.sender,
+                lowerTick: lowerTick,
+                upperTick: upperTick,
+                liquidityDelta: -int128(amount)
+            })
+        );
+
+        amount0 = uint256(-amount0Int);
+        amount1 = uint256(-amount1Int);
+
+        if(amount0 > 0 || amount1 > 0) {
+            (position.tokensOwed0, position.tokensOwed1) = (
+                position.tokensOwed0 + uint128(amount0),
+                position.tokensOwed1 + uint128(amount1)
+            );
+        }
+
+        emit Burn(msg.sender, lowerTick, upperTick, amount, amount0, amount1);
+    }
+
+    function collect(
+        address recipient,
+        int24 lowerTick,
+        int24 upperTick,
+        uint128 amount0Requested,
+        uint128 amoount1Requested
+    ) public returns (uint128 amount0, uint128 amount1) {
+        Position.Info memory position = positions.get(
+            msg.sender,
+            lowerTick,
+            upperTick
+        );
+
+        amount0 = amount0Requested > position.tokensOwed0
+            ? position.tokensOwed0
+            : amount0Requested;
+        amount1 = amount1Requested > position.tokensOwed1
+            ? position.tokensOwed1
+            : amount1Requested;
+
+        if (amount0 > 0) {
+            position.tokensOwed0 -= amount0;
+            IERC20(token0).transfer(recipient, amount0);
+        }
+
+        if (amount1 > 0) {
+            position.tokensOwed1 -= amount1;
+            IERC20(token1).transfer(recipient, amount1);
+        }
+
+        emit Collect(
+            msg.sender,
+            recipient,
+            lowerTick,
+            upperTick,
             amount0,
             amount1
         );
