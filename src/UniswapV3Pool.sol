@@ -80,6 +80,13 @@ contract UniswapV3Pool {
         uint256 amountOut;
     }
 
+    struct ModifyPositionParams {
+        address owner;
+        int24 lowerTick;
+        int24 upperTick;
+        int128 liquidityDelta;
+    }
+
     address public immutable factory;
     address public immutable token0;
     address public immutable token1;
@@ -112,6 +119,93 @@ contract UniswapV3Pool {
         slot0 = Slot0({sqrtPriceX96: sqrtPriceX96, tick: tick});
     }
 
+    function _modifyPosition(
+        ModifyPositionParams memory params
+    ) internal returns (Position.Info storage position, int256 amount0, int256 amount1) {
+        Slot0 storage slot0_ = slot0;
+        uint256 feeGrowthGlobal0X128_ = feeGrowthGlobal0x128
+        uint256 feeGrowthGlobal1X128_ = feeGrowthGlobal1x128
+        position = positions.get(
+            params.owner,
+            params.lowerTick,
+            params.upperTick
+        );
+
+        // 更新两端tick 
+        bool flippedLower = ticks.update(
+            prams.lowerTick,
+            slot0_.tick,
+            int128(params.liquidityDelta),
+            feeGrowthGlobal0X128_,
+            feeGrowthGlobal1X128_,
+            false
+        );
+        bool flippedUpper = ticks.update(
+            prams.upperTick,
+            slot0_.tick,
+            int128(params.liquidityDelta),
+            feeGrowthGlobal0X128_,
+            feeGrowthGlobal1X128_,
+            true
+        );
+
+        // 通过bitmap 记录tick的状态
+        if (flippedLower) {
+            tickBitmap.flipTick(params.lowerTick, int24(tickSpacing));
+        }
+        if (flippedUpper) {
+            tickBitmap.flipTick(params.upperTick, int24(tickSpacing));
+        }
+
+        (uint256 feeGrowthInside0X128, uint256 feeGrowthInside1X128) = ticks
+            .getFeeGrowthInside(
+                params.lowerTick,
+                params.upperTick,
+                slot0_.tick,
+                feeGrowthGlobal0X128_,
+                feeGrowthGlobal1X128_
+            );
+
+        //更新tokensOwed
+        position.update(
+            params.liquidityDelta,
+            feeGrowthInside0X128,
+            feeGrowthInside1X128
+        );
+
+        // 根据区间，liquidity  计算需要的token数量； 如果区间包含当前价格， 会复杂一些 ，并且需要更新liquidity
+        if (slot0_.tick < params.lowerTick) {
+            amount0 = Math.calcAmount0Delta(
+                TickMath.getSqrtRatioAtTick(params.lowerTick),
+                TickMath.getSqrtRatioAtTick(params.upperTick),
+                params.liquidityDelta
+            );
+        } else if (slot0_.tick < params.upperTick) {
+            amount0 = Math.calcAmount0Delta(
+                slot0_.sqrtPriceX96,
+                TickMath.getSqrtRatioAtTick(params.upperTick),
+                params.liquidityDelta
+            );
+
+            amount1 = Math.calcAmount1Delta(
+                TickMath.getSqrtRatioAtTick(params.lowerTick),
+                slot0_.sqrtPriceX96,
+                params.liquidityDelta
+            );
+
+            liquidity = LiquidityMath.addLiquidity(
+                liquidity,
+                params.liquidityDelta
+            );
+        } else {
+            amount1 = Math.calcAmount1Delta(
+                TickMath.getSqrtRatioAtTick(params.lowerTick),
+                TickMath.getSqrtRatioAtTick(params.upperTick),
+                params.liquidityDelta
+            );
+        }
+    }
+
     /**
      * @dev amount 是流动性数量
      */
@@ -130,52 +224,17 @@ contract UniswapV3Pool {
 
         if (amount == 0) revert ZeroLiquidity();
 
-        bool flippedLower = ticks.update(lowerTick, int128(amount), false);
-        bool flippedUpper = ticks.update(upperTick, int128(amount), true);
-        if (flippedLower) {
-            tickBitmap.flipTick(lowerTick, int24(tickSpacing));
-        }
-        if (flippedUpper) {
-            tickBitmap.flipTick(upperTick, int24(tickSpacing));
-        }
-
-        Position.Info storage position = positions.get(
-            owner,
-            lowerTick,
-            upperTick
+        (,int256 amount0Int, int256 amount1Int) = _modifyPosition(
+            ModifyPositionParams({
+                owner: owner,
+                lowerTick: lowerTick,
+                upperTick: upperTick,
+                liquidityDelta: int128(amount)
+            })
         );
-        position.update(amount);
 
-        Slot0 memory slot0_ = slot0;
-        if (slot0_.tick < lowerTick) {
-            amount0 = Math.calcAmount0Delta(
-                TickMath.getSqrtRatioAtTick(lowerTick),
-                TickMath.getSqrtRatioAtTick(upperTick),
-                amount
-            );
-        } else if (slot0_.tick < upperTick) {
-            amount0 = Math.calcAmount0Delta(
-                slot0_.sqrtPriceX96,
-                TickMath.getSqrtRatioAtTick(upperTick),
-                amount
-            );
-
-            amount1 = Math.calcAmount1Delta(
-                slot0_.sqrtPriceX96,
-                TickMath.getSqrtRatioAtTick(lowerTick),
-                amount
-            );
-
-            liquidity = LiquidityMath.addLiquidity(liquidity, int128(amount)); // TODO
-        } else {
-            amount1 = Math.calcAmount1Delta(
-                TickMath.getSqrtRatioAtTick(lowerTick),
-                TickMath.getSqrtRatioAtTick(upperTick),
-                amount
-            );
-        }
-
-        liquidity += uint128(amount);
+        amount0 = amount0Int;
+        amount1 = amount1Int;
 
         uint256 balance0Before;
         uint256 balance1Before;
@@ -303,9 +362,12 @@ contract UniswapV3Pool {
             }
         }
 
-        //todo
         if (state.tick != slot0_.tick) {
             slot0.tick = state.tick;
+            slot0.sqrtPriceX96 = state.sqrtPriceX96;
+
+            //todo observation
+        } else {
             slot0.sqrtPriceX96 = state.sqrtPriceX96;
         }
 
