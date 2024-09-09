@@ -119,8 +119,8 @@
 
 #### milestone5
 - swap fees
-  - 费用收集
+  - 费用收集&分发
     - tick 费用跟踪
     - position 费用跟踪
-  - 分发
+    - 
 - price oracle
