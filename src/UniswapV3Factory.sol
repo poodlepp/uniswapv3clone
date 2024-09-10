@@ -34,7 +34,7 @@ contract UniswapV3Factory is IUniswapV3PoolDeployer {
     ) public returns (address pool) {
         if (tokenX == tokenY) revert TokensMustBeDifferent();
 
-        if (!fees[fee] == 0) revert UnsupportedFee();
+        if (fees[fee] == 0) revert UnsupportedFee();
 
         (tokenX, tokenY) = tokenX < tokenY
             ? (tokenX, tokenY)

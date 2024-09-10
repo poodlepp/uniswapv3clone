@@ -8,6 +8,7 @@ import "./interfaces/IUniswapV3Pool.sol";
 import "./lib/TickMath.sol";
 import "./lib/LiquidityMath.sol";
 import "./lib/Path.sol";
+import "./lib/PoolAddress.sol";
 
 contract UniswapV3Manager is IUniswapV3Manager {
     using Path for bytes;
@@ -21,18 +22,12 @@ contract UniswapV3Manager is IUniswapV3Manager {
         factory = factory_;
     }
 
-    function mint2(
+    function mint(
         MintParams calldata params
     ) public returns (uint256 amount0, uint256 amount1) {
-        address poolAddress = PoolAddress.computeAddress(
-            factory,
-            params.token0,
-            params.token1,
-            params.tickSpacing
-        );
-        IUniswapV3Pool pool = IUniswapV3Pool(poolAddress);
+        IUniswapV3Pool pool = getPool(params.tokenA, params.tokenB, params.fee);
+        (uint160 sqrtPriceX96, ) = pool.slot0();
 
-        (uint160 sqrtPriceX96, ) = pol.slot0();
         uint160 sqrtPriceLowerX96 = TickMath.getSqrtRatioAtTick(
             params.lowerTick
         );
@@ -82,38 +77,8 @@ contract UniswapV3Manager is IUniswapV3Manager {
         );
     }
 
-    function swap(SwapParams memory params) public returns (uint256 amountOut) {
-        address payer = msg.sender;
-        bool hasMultiplePools;
-
-        while (true) {
-            hasMultiplePools = params.path.hasMultiplePools();
-            params.amountIn = _swap(
-                params.amountIn,
-                hasMultiplePools ? address(this) : params.recipient,
-                0,
-                SwapCallbackData({
-                    path: params.path.getFirstPool(),
-                    payer: payer
-                })
-            );
-
-            if (hasMultiplePools) {
-                payer = address(this);
-                params.path = params.path.skipToken();
-            } else {
-                amountOut = params.amountIn;
-                break;
-            }
-        }
-
-        if (amountOut < params.minAmountOut) {
-            revert TooLittleReceived(amountOut);
-        }
-    }
-
     function _swap(
-        uint256 amoutnIn,
+        uint256 amountIn,
         address recipient,
         uint160 sqrtPriceLimitX96,
         SwapCallbackData memory data
@@ -141,26 +106,51 @@ contract UniswapV3Manager is IUniswapV3Manager {
                     : sqrtPriceLimitX96,
                 abi.encode(data)
             );
+        amountOut = uint256(-(zeroForOne ? amount1 : amount0));
     }
 
     function getPool(
         address token0,
         address token1,
-        uint24 tickSpacing
+        uint24 fee
     ) internal view returns (IUniswapV3Pool pool) {
         (token0, token1) = token0 < token1
             ? (token0, token1)
             : (token1, token0);
         pool = IUniswapV3Pool(
-            PoolAddress.computeAddress(factory, token0, token1, tickSpacing)
+            PoolAddress.computeAddress(factory, token0, token1, fee)
         );
     }
 
-    function swap(
-        address poolAddress_,
-        bytes calldata data
-    ) public returns (int256, int256) {
-        return UniswapV3Pool(poolAddress_).swap(msg.sender, data);
+    function swap(SwapParams memory params) public returns (uint256 amountOut) {
+        address payer = msg.sender;
+        bool hasMultiplePools;
+
+        while (true) {
+            //判断是否需要swap多次；如果不需要则后续会break
+            hasMultiplePools = params.path.hasMultiplePools();
+
+            params.amountIn = _swap(
+                params.amountIn,
+                hasMultiplePools ? address(this) : params.recipient,
+                0,
+                SwapCallbackData({
+                    path: params.path.getFirstPool(),
+                    payer: payer
+                })
+            );
+
+            if (hasMultiplePools) {
+                payer = address(this);
+                params.path = params.path.skipToken();
+            } else {
+                amountOut = params.amountIn;
+                break;
+            }
+        }
+
+        if (amountOut < params.minAmountOut)
+            revert TooLittleReceived(amountOut);
     }
 
     function uniswapV3MintCallback(
@@ -181,7 +171,8 @@ contract UniswapV3Manager is IUniswapV3Manager {
         int256 amount1,
         bytes calldata data_
     ) public {
-        SwapCallbackData memory extra = abi.decode(data_, (SwapCallbackData));
+        SwapCallbackData memory data = abi.decode(data_, (SwapCallbackData));
+        (address tokenIn, address tokenOut, ) = data.path.decodeFirstPool();
 
         bool zeroForOne = tokenIn < tokenOut;
 

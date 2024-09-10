@@ -10,7 +10,28 @@ interface IUniswapV3Pool {
 
     function slot0() external view returns (uint160 sqrtPriceX96, int24 tick);
 
-    //todo get状态变量
+    function factory() external view returns (address);
+
+    function token0() external view returns (address);
+
+    function token1() external view returns (address);
+
+    function tickSpacing() external view returns (uint24);
+
+    function fee() external view returns (uint24);
+
+    function positions(
+        bytes32 key
+    )
+        external
+        view
+        returns (
+            uint128 liquidity,
+            uint256 feeGrowthInside0LastX128,
+            uint256 feeGrowthInside1LastX128,
+            uint128 tokenOwed0,
+            uint128 tokenOwed1
+        );
 
     function mint(
         address owner,
