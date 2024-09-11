@@ -122,5 +122,13 @@
   - 费用收集&分发
     - tick 费用跟踪
     - position 费用跟踪
-    - 
+- flash fee
+- protocol fee 从交易费中扣除，比如feeAmount/4   
+  - 1/4 ~ 1/10 之间
 - price oracle
+  - observation 使用slot记录最近的价格数据
+  - 每个区块记录一个价格
+  - 相对V2 增加了灵活性，自动化
+
+#### milestone6
+- position - NFT 
