@@ -1,8 +1,29 @@
+[TOC]
 ### some notes about uniswapV3
+> 参考文档  https://y1cunhui.github.io/uniswapV3-book-zh-cn/
 
-> source  https://y1cunhui.github.io/uniswapV3-book-zh-cn/
+#### 学习顺序建议
+1. 以本文的参考文档为入口，掌握核心原理
+   1. 集中流动性的
+   2. 费用的收集，分发
+2. 从github中深入源代码
+   1. https://github.com/Uniswap/v3-core.git
+   2. https://github.com/Uniswap/v3-periphery.git
+      1. 此部分重点
+         1. positionManager  - LP相关
+         2. swapRouter - 交易者相关
+            1. 不过目前官网使用了universal Router 代替了swapRouter
+   3. https://github.com/Uniswap/universal-router.git
+      1. 更灵活，更通用的router
+3. tenderly进行simulator学习
+   1. swap示例 
+      1. > https://dashboard.tenderly.co/poodlepp/somethingnew/tx/arbitrum/0x1da40c110de8e27bd08f357d435c2abb05993589435c2969578c7c1d89709837
+   2. mint示例
+      1. > https://dashboard.tenderly.co/poodlepp/somethingnew/tx/arbitrum/0x866de09ac9eae73f2b4f283ff57adb7390e7f038d7ab359b53c6b02d254863c5
+
 
 #### milestone0
+##### 集中流动性，tick, x-y-L-P
 - 做市商AMM
   - 恒定函数做市商 (Constant Function Market Makers) CFMM
   - ![alt text](readme_img/image01.png)
@@ -35,6 +56,7 @@
 
 
 #### milestone1
+##### mint swap 半成品
 - 设定
   - ETH/USDC 现货价格 1:5000
   - 流动性区间 4545 - 5500
@@ -66,9 +88,11 @@
   - cast --to-dec
 
 #### milestone2
+##### 单个区间内的mint swap
 - 套用数学公式 实现单个区间内的 mint swap
 
 #### milestone3
+##### 跨tick的mint swap
 - 跨tick交易
   - 提供流动性 区间可以不包含当前的价格节点
     - 不包含当前的price  那么其实只需要提供一种token
@@ -96,6 +120,8 @@
 
 
 #### milestone4
+##### pool管理（create2,fee,tickSpacing）
+##### 链式交易
 - 多池子交易
   - 工厂合约
   - 链式交易
@@ -118,6 +144,9 @@
 - tick舍入
 
 #### milestone5
+##### 费用的收集分发 tick,position
+##### protocolFee
+##### oracle,observation
 - swap fees
   - 费用收集&分发
     - tick 费用跟踪
@@ -131,4 +160,7 @@
   - 相对V2 增加了灵活性，自动化
 
 #### milestone6
-- position - NFT 
+##### position - NFT 
+
+#### 其他
+- universal router
